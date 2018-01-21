@@ -136,27 +136,27 @@ define([
                 });
 
                 return changeScene(this.sourceData.startScene)
-                .then((output) => {
-                    return render();
-                })
-                .then(() => {
-                    $(window).resize(_.debounce(() => {
-                        render().then(()=> {
-                            this.editor.render();
-                        });
-                    }, 500, {
-                        maxWait: 1000,
-                    }));
-
-                    if ($canvas) {
-                        $canvas.mousemove(_.debounce(handleCursorMove, 150, {
-                            maxWait: 200,
+                    .then((output) => {
+                        return render();
+                    })
+                    .then(() => {
+                        $(window).resize(_.debounce(() => {
+                            render().then(()=> {
+                                this.editor.render();
+                            });
+                        }, 500, {
+                            maxWait: 1000,
                         }));
-                        $canvas.mousedown(handleClickDown);
-                        $canvas.mouseup(handleClickUp);
-                    }
-                    this.editor.render();
-                });
+
+                        if ($canvas) {
+                            $canvas.mousemove(_.debounce(handleCursorMove, 150, {
+                                maxWait: 200,
+                            }));
+                            $canvas.mousedown(handleClickDown);
+                            $canvas.mouseup(handleClickUp);
+                        }
+                        this.editor.render();
+                    });
             });
         };
 
@@ -209,6 +209,10 @@ define([
         }
 
         var changeScene = (sceneKey) => {
+            if(!this.scenes[sceneKey]) {
+                this.scenes[sceneKey] = new Scene(this, sceneKey, this.sourceData.scenes[sceneKey]);
+            }
+
             this.isValidSceneKey(sceneKey, true);
 
             this.currentScene = this.scenes[sceneKey];

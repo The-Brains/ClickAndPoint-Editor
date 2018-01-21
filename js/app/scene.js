@@ -29,60 +29,68 @@ define([
 
         var name = data.name;
         var key = key;
-        var backgroundImg = data.backgroundImg;
         var interactions = _.map(data.interactions, (interaction, index) => {
             return new Interaction(this, index, interaction);
         });
 
         this.getImageBackground = () => {
-            return backgroundImg;
+            return data.backgroundImg;
+        }
+        
+        function applyBackgroundImage(image, renderer, callback) {
+            var $canvas = renderer.get$Canvas();
+            var canvasContext = renderer.getContext();
+            var originalWidth = image.naturalWidth;
+            var originalHeight = image.naturalHeight;
+            var originalRatio = originalWidth / originalHeight * 1.0;
+
+            var fullHeight = $canvas.height();
+            var height = fullHeight;
+            var fullWidth =  $canvas.width();
+            var width = fullWidth;
+
+            var ratioWidth = originalWidth / width;
+            var ratioHeight = originalHeight / height;
+            if (ratioWidth > ratioHeight) {
+                height = width / originalRatio;
+            } else {
+                width = height * originalRatio;
+            }
+
+            renderer.setBackgroundRatio(
+                width / originalWidth,
+                height / originalHeight,
+            );
+
+            var cornerX = 0;
+            var cornerY = 0;
+
+            if (height < fullHeight) {
+                cornerY = (fullHeight - height) / 2;
+            }
+            if (width < fullWidth) {
+                cornerX = (fullWidth - width) / 2;
+            }
+
+            renderer.setOffset(cornerX, cornerY);
+
+            canvasContext.drawImage(image, cornerX, cornerY, width, height);
+            callback();
         }
 
+        var backgroundSrc = null;
+        var backgroundImage = new Image();
         var renderBackground = (renderer) => {
             return new Promise((resolve, reject) => {
-                var img = new Image();
-                var $canvas = renderer.get$Canvas();
-                var canvasContext = renderer.getContext();
+                if(backgroundSrc === this.getImageBackground()) {
+                    applyBackgroundImage(backgroundImage, renderer, resolve);
+                    return;
+                }
 
-                img.onload = (source) => {
-                    var originalWidth = source.target.naturalWidth;
-                    var originalHeight = source.target.naturalHeight;
-                    var originalRatio = originalWidth / originalHeight * 1.0;
-
-                    var fullHeight = $canvas.height();
-                    var height = fullHeight;
-                    var fullWidth =  $canvas.width();
-                    var width = fullWidth;
-
-                    var ratioWidth = originalWidth / width;
-                    var ratioHeight = originalHeight / height;
-                    if (ratioWidth > ratioHeight) {
-                        height = width / originalRatio;
-                    } else {
-                        width = height * originalRatio;
-                    }
-
-                    renderer.setBackgroundRatio(
-                        width / originalWidth,
-                        height / originalHeight,
-                    );
-
-                    var cornerX = 0;
-                    var cornerY = 0;
-
-                    if (height < fullHeight) {
-                        cornerY = (fullHeight - height) / 2;
-                    }
-                    if (width < fullWidth) {
-                        cornerX = (fullWidth - width) / 2;
-                    }
-
-                    renderer.setOffset(cornerX, cornerY);
-
-                    canvasContext.drawImage(img, cornerX, cornerY, width, height);
-                    resolve();
+                backgroundImage.onload = (source) => {
+                    applyBackgroundImage(source.target, renderer, resolve);
                 };
-                img.src = backgroundImg;
+                backgroundImage.src = backgroundSrc = data.backgroundImg;
             });
         }
 

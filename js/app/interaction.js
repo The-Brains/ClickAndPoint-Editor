@@ -38,14 +38,7 @@ define([
         );
 
         var location = new Location(this, data.location);
-        var actions = _.flatMap(data.actions, (action, index) => {
-            if (typeof action === 'string') {
-                var actions = getGame().getActions(action);
-                return actions;
-            } else {
-                return new Action(this, index, action);
-            }
-        });
+        var actions;
 
         var dynamicCondition = () => {
             return data.if ? !!getGame().getVariable(data.if) : true;
@@ -79,6 +72,15 @@ define([
         }
 
         this.render = (renderer, mouse) => {
+            actions = _.flatMap(data.actions, (action, index) => {
+                if (typeof action === 'string') {
+                    return getGame().getActions(action);
+                } else if (action.ref && action.useRef) {
+                    return getGame().getActions(action.ref);
+                } else {
+                    return new Action(this, index, action);
+                }
+            });
             return handleUpdate(renderer, mouse, 'render');
         }
         this.handleCursorMove = (renderer, mouse) => {
