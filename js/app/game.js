@@ -172,6 +172,10 @@ define([
 
         this.isValidItemKey = (itemKey, raise=false) => {
             var result = _.has(this.items, itemKey);
+            if(!result && _.has(this.sourceData.items, itemKey)) {
+                this.items[itemKey] = new Item(this, itemKey, this.sourceData.items[itemKey]);
+                result = _.has(this.items, itemKey);
+            }
 
             if (!result && raise) {
                 throw `[MISSING ITEMS] The item '${itemKey}' cannot be find.`;

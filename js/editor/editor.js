@@ -4,13 +4,18 @@ define(function() {
         var game = gameInterface;
         var currentScene;
         var self = this;
-        self.active = false;
         var lastInteractionSelected = null;
         var actionIndex = 0;
         var borderWidth = 3;
         var flashInterval;
         var rollOvered = null;
         var editorTab = "scenes";
+        var globalActionSelected = null;
+        var browseScene = false;
+        var itemSelected = null;
+        var selectedVariable = null;
+
+        self.active = false;
 
         var availableActions = {
             'goto': function() {
@@ -36,6 +41,7 @@ define(function() {
                     locationDiv.style.display = "none";
                 }
 
+                browseScene = false;
                 currentScene = scene;
                 selectInteraction(null);
                 render();
@@ -43,9 +49,12 @@ define(function() {
         }
 
         function jumpToScene(sceneName) {
+            browseScene = false;
             currentScene = sceneName;
             var locationDiv = document.getElementById('locationDiv');
-            locationDiv.style.display = "none";
+            if(locationDiv) {
+                locationDiv.style.display = "none";
+            }
             selectInteraction(null);
             render();
             game.gotoScene(currentScene).then(() => {
@@ -102,6 +111,335 @@ define(function() {
             });
         }
 
+        function addSceneThumbnail(div) {
+            var w = game.renderer.get$Canvas().width(),
+                h = game.renderer.get$Canvas().height();
+            var scale = Math.min(100/w, 50/h);
+
+            for(var s in game.data.scenes) {
+                var scene = game.data.scenes[s];
+                var thumbnail = div.appendChild(document.createElement("div"));
+                thumbnail.style.width = w * scale +"px";
+                thumbnail.style.height = h * scale + "px";
+                thumbnail.style.margin = "2px";
+                thumbnail.style.backgroundColor = "black";
+                thumbnail.style.cursor = "pointer";
+                thumbnail.style.backgroundImage = "url(" + scene.backgroundImg + ")";
+                thumbnail.style.backgroundSize = "contain";
+                thumbnail.style.backgroundRepeat = "no-repeat";
+                thumbnail.style.cursor = "pointer";
+                thumbnail.style.backgroundColor = "black";
+                thumbnail.style.backgroundPosition = "center";
+                thumbnail.scene = s;
+
+                var label = thumbnail.appendChild(document.createElement("div"));
+                label.style.fontSize = "11px";
+                label.style.backgroundColor = "beige";
+                label.style.opacity = .9;
+                label.style.textAlign = "center";
+                label.innerText = s;
+
+                thumbnail.addEventListener("click", (e) => {
+                    jumpToScene(e.currentTarget.scene);
+                });
+            }
+        }
+
+        function changeItemReference(oldName, newName) {
+            for(var actionName in game.data.globalActions) {
+                game.data.globalActions[actionName].actions.forEach(action => {
+                    changeItemReferenceInAction(oldName, newName, action);
+                });
+            }
+            for(var s in game.data.scenes) {
+                game.data.scenes[s].interactions.forEach(interaction => {
+                    interaction.actions.forEach(action => {
+                        changeItemReferenceInAction(oldName, newName, action);
+                    });
+                });
+            }
+        }
+
+        function changeItemReferenceInAction(oldName, newName, action) {
+            if(typeof(action)==='object') {
+                if(action.type==='take' && action.target===oldName) {
+                    action.target = newName;
+                }
+            }
+        }
+
+        function addItemSelector(div) {
+            var divItems = div.appendChild(document.createElement("div"));
+            divItems.style.display = "flex";
+            divItems.style.flexDirection = "column";
+
+            var divThumbnail = divItems.appendChild(document.createElement("div"));
+            divThumbnail.style.display = "flex";
+            divThumbnail.style.flexWrap = "warp";
+            for(var i in game.data.items) {
+                var item = game.data.items[i];
+                var thumbnail = divThumbnail.appendChild(document.createElement("div"));
+                thumbnail.style.width = "50px";
+                thumbnail.style.height = "40px";
+                thumbnail.style.backgroundColor = "black";
+                thumbnail.style.backgroundImage = "url(" + item.icon + ")";
+                thumbnail.style.backgroundSize = "contain";
+                thumbnail.style.backgroundRepeat = "no-repeat";
+                thumbnail.style.backgroundPosition = "center";
+                thumbnail.style.cursor = "pointer";
+                thumbnail.item = i;
+
+                var label = thumbnail.appendChild(document.createElement("div"));
+                label.style.fontSize = "10px";
+                label.style.backgroundColor = i===itemSelected ? "yellowgreen" : "white";
+                label.style.opacity = .9;
+                label.style.textAlign = "center";
+                label.innerText = i;
+
+                if(itemSelected===i) {
+                    thumbnail.style.border = "2px solid green";
+                    thumbnail.style.margin = "2px";
+                } else {
+                    thumbnail.style.margin = "4px";
+                }
+                thumbnail.addEventListener("click", (e) => {
+                    itemSelected = itemSelected=== e.currentTarget.item
+                        ? null : e.currentTarget.item;
+                    render();
+                });
+            }
+
+            var addItem = divThumbnail.appendChild(document.createElement("div"));
+            addItem.style.fontSize = "30px";
+            addItem.style.width = "50px";
+            addItem.style.height = "40px";
+            addItem.style.backgroundColor = "#eeeeee";
+            addItem.style.cursor = "pointer";
+            addItem.style.textAlign = "center";
+            addItem.style.margin = "4px";
+            addItem.innerText = "+";
+            addItem.addEventListener("click", (e) => {
+                var newName = prompt("Enter a name for the new item");
+                if(newName && newName.trim()!=="") {
+                    if(game.data.items[newName]) {
+                        alert("The name \"" + newName + "\" already exists.")
+                    } else {
+                        game.data.items[newName] = {
+                            description: "",
+                            icon:placeHolderImage,
+                        };
+                        itemSelected = newName;
+                        game.render();
+                        render();
+                    }
+                }
+            });
+
+            if(itemSelected) {
+                var item = game.data.items[itemSelected];
+                var divItemDescription = divItems.appendChild(document.createElement("div"));
+                divItemDescription.style.borderTop = "2px solid gray";
+                divItemDescription.style.marginTop = "3px";
+                divItemDescription.style.paddingTop = "3px";
+                divItemDescription.style.display = "flex";
+                divItemDescription.style.flexDirection = "row";
+
+                var divIcon = divItemDescription.appendChild(document.createElement("div"));
+                divIcon.style.width = "60px";
+                divIcon.style.height = "50px";
+                divIcon.style.backgroundColor = "black";
+                divIcon.style.backgroundImage = "url(" + item.icon + ")";
+                divIcon.style.backgroundSize = "contain";
+                divIcon.style.backgroundRepeat = "no-repeat";
+                divIcon.style.backgroundPosition = "center";
+                divIcon.style.cursor = "pointer";
+
+                var divUpload = divIcon.appendChild(document.createElement("div"));
+                divUpload.style.width = 0;
+                divUpload.style.height = 0;
+                divUpload.style.overflow = "hidden";
+                var input = divUpload.appendChild(document.createElement("input"));
+                input.type = "file";
+                input.addEventListener("change", onUploadItemIcon);
+                input.setAttribute("accept", "image/*");
+
+                divIcon.addEventListener("click", (e) => {
+                    input.click();
+                });
+
+                var divInfo =  divItemDescription.appendChild(document.createElement("div"));
+                divInfo.style.display = "flex";
+                divInfo.style.flexDirection = "column";
+                divInfo.style.width = "100%";
+                divInfo.style.marginLeft = "4px";
+
+                var itemName = divInfo.appendChild(document.createElement("div"));
+                itemName.style.fontSize = "12px";
+                itemName.innerText = itemSelected;
+
+                var links = divInfo.appendChild(document.createElement('div'));
+                links.style.fontSize = "12px";
+                links.style.marginBottom = "4px";
+
+                var renameLink = links.appendChild(document.createElement('span'));
+                renameLink.innerText = 'rename';
+                renameLink.style.cursor = "pointer";
+                renameLink.style.color = "green";
+                renameLink.addEventListener("click", (e) => {
+                    var name = prompt("Enter a new name for this item", itemSelected);
+                    if(name !== null && name.trim()!=="" && name !== itemSelected) {
+                        if(game.data.items[name]) {
+                            alert("This item \""+ name +"\" already exists.");
+                        } else {
+                            game.data.items[name] = game.data.items[itemSelected];
+                            delete game.data.items[itemSelected];
+                            changeItemReference(itemSelected, name);
+                            itemSelected = name;
+                            game.render();
+                            render();
+                        }
+                    }
+                    render();
+                });
+
+                links.appendChild(document.createElement("span")).innerText = " - ";
+
+                var deleteLink = links.appendChild(document.createElement('span'));
+                deleteLink.innerText = "delete";
+                deleteLink.style.cursor = "pointer";
+                deleteLink.style.color = "crimson";
+                deleteLink.addEventListener("click", (e) => {
+                    var answer = confirm("Delete the item \"" + itemSelected + "\"?");
+                    if(answer) {
+                        delete game.data.items[itemSelected];
+                        changeItemReference(itemSelected, '');
+                        itemSelected = null;
+                        render();
+                        game.render();
+                    }
+                });
+
+                var itemDesc = divInfo.appendChild(document.createElement("input"));
+                itemDesc.style.width = "100%";
+                itemDesc.value = item.description;
+                itemDesc.placeholder = "Enter a description for this item";
+                itemDesc.addEventListener("change", (e) => {
+                    game.data.items[itemSelected].description = e.target.value;
+                    game.render();
+                });
+                itemDesc.addEventListener("keydown", (e) => {
+                    if(e.key==="Enter") {
+                        e.currentTarget.blur();
+                    }
+                });
+            }
+        }
+
+        function addVariableEditor(div) {
+            var links = div.appendChild(document.createElement('div'));
+            links.style.fontSize = "12px";
+            links.style.marginLeft = "4px";
+
+            for(var varName in game.data.variables) {
+                var varLink = links.appendChild(document.createElement('div'));
+                varLink.style.borderRadius = "4px";
+                varLink.style.margin = "1px 1px 1px 5px";
+                varLink.style.padding = "1px 3px 2px 3px";
+                varLink.style.cursor = "pointer";
+                varLink.variable = varName;
+                if(selectedVariable===varName) {
+                    varLink.style.color = "navy";
+                    varLink.style.backgroundColor = "snow";
+                } else {
+                    varLink.style.color = "navy";
+                    varLink.style.backgroundColor = "snow";
+                }
+
+                var varLabel = varLink.appendChild(document.createElement('span'));
+                varLabel.innerText = varName;
+
+                var checkbox = varLink.appendChild(document.createElement('input'));
+                checkbox.type = "checkbox";
+                checkbox.id = varName + '_check';
+                checkbox.checked = game.data.variables[varName];
+                checkbox.name = varName;
+                checkbox.variable = varName;
+                checkbox.addEventListener("change", (e) => {
+                    game.data.variables[e.target.name] =
+                        e.target.checked;
+                    selectedVariable = e.target.variable;
+                    render();
+                    game.render();
+                });
+
+                varLink.addEventListener("click", e => {
+                    selectedVariable = e.target.variable;
+                    render();
+                    game.render();
+                });
+
+            }
+        }
+
+        function addActionSelector(div) {
+            var links = div.appendChild(document.createElement('div'));
+            links.style.fontSize = "12px";
+            links.style.marginLeft = "4px";
+            links.style.borderRight = "2px solid gray";
+            links.style.height = "75%";
+            links.style.textAlign = "right";
+
+            for(var actionName in game.data.globalActions) {
+                var actionLink = links.appendChild(document.createElement('div'));
+                actionLink.innerText = actionName;
+                actionLink.style.borderTopLeftRadius = "8px";
+                actionLink.style.borderBottomLeftRadius = "8px";
+                actionLink.style.cursor = "pointer";
+                if(actionName===globalActionSelected) {
+                    actionLink.style.color = "white";
+                    actionLink.style.backgroundColor = "crimson";
+                    actionLink.style.margin = "1px 1px 1px 5px";
+                    actionLink.style.padding = "0 2px 1px 15px";
+                } else {
+                    actionLink.style.color = "crimson";
+                    actionLink.style.margin = "1px 1px 1px 15px";
+                    actionLink.style.padding = "0 2px 1px 5px";
+                    actionLink.style.backgroundColor = "mistyrose";
+                }
+                actionLink.action = actionName;
+                actionLink.addEventListener("click", (e) => {
+                    globalActionSelected = globalActionSelected === e.target.action
+                        ? null : e.target.action;
+                    actionIndex = -1;
+                    render();
+                });
+            }
+
+            var createAction = links.appendChild(document.createElement('div'));
+            createAction.style.marginTop = "4px";
+            createAction.innerText = "new action";
+            createAction.style.cursor = "pointer";
+            createAction.style.color = "blue";
+            createAction.style.textAlign = "center";
+            createAction.addEventListener("click", (e) => {
+                var name = prompt("Enter a name for this action", '');
+                if(name !== null && name.trim()!=="") {
+                    if(game.data.globalActions[name]) {
+                        alert("The action \""+name+"\" already exists.");
+                    } else {
+                        game.data.globalActions[name] = {
+                            actions: [],
+                            backgroundImg: placeHolderImage,
+                            name: name,
+                        };
+                        globalActionSelected = name;
+                        actionIndex = -1;
+                        render();
+                    }
+                }
+            });
+        }
+
         function addSceneSelector(div) {
             var scene = getActiveScene();
 
@@ -139,7 +477,7 @@ define(function() {
             input.addEventListener("change", onUploadBackground);
             input.setAttribute("accept", "image/*");
 
-            backgroundDiv.addEventListener("mousedown", () => {
+            backgroundDiv.addEventListener("click", () => {
                 input.click();
             });
 
@@ -154,7 +492,7 @@ define(function() {
             }
 
             select.addEventListener("change", (e) => {
-                jumpToScene(e.target.value);
+                jumpToScene(e.currentTarget.value);
             });
 
             var links = sceneDiv.appendChild(document.createElement('div'));
@@ -270,13 +608,13 @@ define(function() {
                     d.interaction = interaction;
                     d.addEventListener("mousedown", selectLocation);
                     d.addEventListener('mouseover', (e) => {
-                        if(rollOvered !== e.target.interaction) {
-                            rollOvered = e.target.interaction;
+                        if(rollOvered !== e.currentTarget.interaction) {
+                            rollOvered = e.currentTarget.interaction;
                             render();
                         }
                     });
                     d.addEventListener('mouseout', (e) => {
-                        if(rollOvered === e.target.interaction) {
+                        if(rollOvered === e.currentTarget.interaction) {
                             rollOvered = null;
                             render();
                         }
@@ -294,7 +632,7 @@ define(function() {
 
         var divOffset = {x:0,y:0, selection: null, cornerDragged: null, originalSize: null};
         function selectLocation(e) {
-            var d = e.target;
+            var d = e.currentTarget;
             d.style.border = borderWidth + "px solid yellow";
             divOffset.x = d.offsetLeft - e.clientX;
             divOffset.y = d.offsetTop - e.clientY;
@@ -305,7 +643,6 @@ define(function() {
             };
             divOffset.selection = d;
             d.style.cursor = "move";
-            selectInteraction(d.interaction);
         }
 
         function showEditIcon(div, src, makeActive) {
@@ -322,14 +659,159 @@ define(function() {
             div.append(img);
         }
 
+        function showSceneEditor(divContainer, divRow, activeChange) {
+            if(!browseScene) {
+                var divLeft = divRow.appendChild(document.createElement('div'));
+                addSceneSelector(divLeft);
+
+                var divRight = divRow.appendChild(document.createElement('div'));
+                addInteractionEditor(divRight);
+
+                var divMore = divRow.appendChild(document.createElement('div'));
+                divMore.style.marginLeft = '20px';
+                addActionEditor(divMore);
+
+                var postUpdate = () => {
+                    var locationDiv = divContainer.appendChild(document.createElement('div'));
+                    locationDiv.id="locationDiv";
+                    updateLocations(locationDiv);
+                    game.render();
+                };
+
+                if(activeChange) {
+                    setTimeout(postUpdate, 510);
+                } else {
+                    postUpdate();
+                }
+            } else {
+                var divThumbnail = divRow.appendChild(document.createElement('div'));
+                divThumbnail.style.display = "flex";
+                divThumbnail.style.flexWrap = "warp";
+                addSceneThumbnail(divThumbnail)
+            }
+        }
+
+        function showActionsEditor(divContainer, divRow, activeChange) {
+            var divLeft = divRow.appendChild(document.createElement('div'));
+            addActionSelector(divLeft);
+
+            var divRight = divRow.appendChild(document.createElement('div'));
+            addActionEditor(divRight);
+
+            var postUpdate = () => {
+                var locationDiv = divContainer.appendChild(document.createElement('div'));
+                locationDiv.id="locationDiv";
+                updateLocations(locationDiv);
+                game.render();
+            };
+
+            if(activeChange) {
+                setTimeout(postUpdate, 510);
+            } else {
+                postUpdate();
+            }
+        }
+
+        function showItemsEditor(divContainer, divRow, activeChange) {
+            var divLeft = divRow.appendChild(document.createElement('div'));
+            divLeft.style.paddingLeft = "8px";
+            divLeft.style.width = "85%";
+            addItemSelector(divLeft);
+
+            var postUpdate = () => {
+                var locationDiv = divContainer.appendChild(document.createElement('div'));
+                locationDiv.id="locationDiv";
+                updateLocations(locationDiv);
+                game.render();
+            };
+
+            if(activeChange) {
+                setTimeout(postUpdate, 510);
+            } else {
+                postUpdate();
+            }
+        }
+
+        function showVariablesEditor(divContainer, divRow, activeChange) {
+            var divLeft = divRow.appendChild(document.createElement('div'));
+            addVariableEditor(divLeft);
+
+            var divRight = divRow.appendChild(document.createElement('div'));
+
+            var postUpdate = () => {
+                var locationDiv = divContainer.appendChild(document.createElement('div'));
+                locationDiv.id="locationDiv";
+                updateLocations(locationDiv);
+                game.render();
+            };
+
+            if(activeChange) {
+                setTimeout(postUpdate, 510);
+            } else {
+                postUpdate();
+            }
+        }
+
         function showBreadcrumb(div) {
             var breadCrumbDiv =  div.appendChild(document.createElement('div'));
             breadCrumbDiv.style.margin = "4px";
             breadCrumbDiv.style.fontSize = "12px";
 
-            breadCrumbDiv.appendChild(document.createElement('span')).innerText = editorTab;
+            var editorSpan = breadCrumbDiv.appendChild(document.createElement('span'));
+            editorSpan.innerText = editorTab;
 
-            if(editorTab==='scenes') {
+            if(editorTab==='items' && itemSelected) {
+                editorSpan.style.cursor = "pointer";
+                editorSpan.style.color = "blue";
+                editorSpan.addEventListener("click", (e) => {
+                    itemSelected = null;
+                    render();
+                });
+
+                breadCrumbDiv.appendChild(document.createElement('span')).innerText = " > ";
+
+                var itemSpan = breadCrumbDiv.appendChild(document.createElement('span'));
+                itemSpan.innerText = itemSelected;
+            }
+
+            if(editorTab==='actions' && globalActionSelected) {
+                editorSpan.style.cursor = "pointer";
+                editorSpan.style.color = "blue";
+                editorSpan.addEventListener("click", (e) => {
+                    globalActionSelected = null;
+                    actionIndex = -1;
+                    render();
+                });
+
+                breadCrumbDiv.appendChild(document.createElement('span')).innerText = " > ";
+
+                var actionSpan = breadCrumbDiv.appendChild(document.createElement('span'));
+                actionSpan.innerText = globalActionSelected;
+
+                if(actionIndex >= 0) {
+                    actionSpan.style.cursor = "pointer";
+                    actionSpan.style.color = "blue";
+                    actionSpan.addEventListener("click", (e) => {
+                        actionIndex = -1;
+                        render();
+                    });
+
+                    breadCrumbDiv.appendChild(document.createElement('span')).innerText = " > ";
+
+                    var selectedAction = game.data.globalActions[globalActionSelected].actions[actionIndex];
+                    var stepSpan = breadCrumbDiv.appendChild(document.createElement('span'));
+                    stepSpan.innerText = getActionText(selectedAction);
+                }
+            }
+
+            if(editorTab==='scenes' && !browseScene) {
+                editorSpan.style.cursor = "pointer";
+                editorSpan.style.color = "blue";
+                editorSpan.addEventListener("click", (e) => {
+                    browseScene = true;
+                    render();
+                });
+
                 breadCrumbDiv.appendChild(document.createElement('span')).innerText = " > ";
                 var sceneSpan = breadCrumbDiv.appendChild(document.createElement('span'));
                 sceneSpan.innerText = currentScene;
@@ -345,7 +827,7 @@ define(function() {
 
                     var interactionSpan =  breadCrumbDiv.appendChild(document.createElement('span'));
                     interactionSpan.innerText = lastInteractionSelected.name
-                        || "Interaction " + (getActiveScene().interactions.indexOf(lastInteractionSelected)+1);
+                        || "interaction " + (getActiveScene().interactions.indexOf(lastInteractionSelected)+1);
 
                     if(actionIndex >= 0) {
                         interactionSpan.style.cursor = "pointer";
@@ -366,14 +848,14 @@ define(function() {
         }
 
         function render() {
+            var activeChange = (self.active && !document.getElementById('divContainer')
+                || !self.active && document.getElementById('divContainer'));
+
             clearInterval(flashInterval);
 
             if(!currentScene) {
                 currentScene = game.data.startScene;
             }
-
-            var activeChange = (self.active && !document.getElementById('divContainer')
-            || !self.active && document.getElementById('divContainer'));
 
             div.innerHTML = "";
             if(!self.active) {
@@ -391,7 +873,6 @@ define(function() {
                 showEditIcon(divHeader, "/click-and-point-editor/assets/close.svg", false);
                 showBreadcrumb(divHeader)
 
-
                 var divContainer = div.appendChild(document.createElement('div'));
                 divContainer.id = "divContainer";
                 divContainer.style.width = "100vw";
@@ -403,30 +884,26 @@ define(function() {
                 var divSidebar = divRow.appendChild(document.createElement('div'));
                 addSidebar(divSidebar);
 
-                if(editorTab === 'scenes') {
-                    var divLeft = divRow.appendChild(document.createElement('div'));
-                    addSceneSelector(divLeft);
-
-                    var divRight = divRow.appendChild(document.createElement('div'));
-                    addInteractionEditor(divRight);
-
-                    var divMore = divRow.appendChild(document.createElement('div'));
-                    divMore.style.marginLeft = '20px';
-                    addActionEditor(divMore);
+                switch(editorTab) {
+                    case 'scenes':
+                        showSceneEditor(divContainer, divRow, activeChange);
+                        break;
+                    case 'actions':
+                        showActionsEditor(divContainer, divRow, activeChange);
+                        break;
+                    case 'items':
+                        showItemsEditor(divContainer, divRow, activeChange);
+                        break;
+                    case 'variables':
+                        showVariablesEditor(divContainer, divRow, activeChange);
+                        break;
                 }
-
-                setTimeout(() => {
-                    var locationDiv = divContainer.appendChild(document.createElement('div'));
-                    locationDiv.id="locationDiv";
-                    updateLocations(locationDiv);
-                    game.render();
-                },activeChange ? 510 : 0);
             }
         }
         var shapes = ['circle','square','icon'];
 
         function onUpload(e) {
-            var uploader = e.target;
+            var uploader = e.currentTarget;
             if (uploader.files && uploader.files[0]) {
                 var reader = new FileReader();
                 reader.addEventListener('load', onFileRead);
@@ -435,7 +912,7 @@ define(function() {
         }
 
         function onFileRead(e) {
-            var reader = e.target;
+            var reader = e.currentTarget;
             if(lastInteractionSelected) {
                 lastInteractionSelected.location.description.image = reader.result;
                 render();
@@ -444,7 +921,7 @@ define(function() {
         }
 
         function onUploadBackground(e) {
-            var uploader = e.target;
+            var uploader = e.currentTarget;
             if (uploader.files && uploader.files[0]) {
                 var reader = new FileReader();
                 reader.addEventListener('load', onFileReadBackground);
@@ -452,8 +929,26 @@ define(function() {
             }
         }
 
+        function onUploadItemIcon(e) {
+            var uploader = e.currentTarget;
+            if (uploader.files && uploader.files[0]) {
+                var reader = new FileReader();
+                reader.addEventListener('load', onFileReadItemIcon);
+                reader.readAsDataURL(uploader.files[0]);
+            }
+        }
+
+        function onFileReadItemIcon(e) {
+            var reader = e.currentTarget;
+            if(itemSelected) {
+                game.data.items[itemSelected].icon = reader.result;
+                render();
+                game.render();
+            }
+        }
+
         function onFileReadBackground(e) {
-            var reader = e.target;
+            var reader = e.currentTarget;
             var scene = getActiveScene();
             scene.backgroundImg = reader.result;
             var img = new Image();
@@ -498,14 +993,20 @@ define(function() {
 
         function addActionEditor(div) {
             var selectedActionDiv = null;
-            if(lastInteractionSelected) {
+            var actionViewed = editorTab === 'scenes'
+                ? lastInteractionSelected
+                : editorTab === 'actions'
+                ? game.data.globalActions[globalActionSelected]
+                : null;
+
+            if(actionViewed) {
                 var actionDiv = div.appendChild(document.createElement('div'));
                 actionDiv.style.backgroundColor = "#dddddd";
-                actionDiv.style.padding = "3px";
+                actionDiv.style.padding = "3px 5px";
                 
-                for(var i=0; i<lastInteractionSelected.actions.length; i++) {
+                for(var i=0; i<actionViewed.actions.length; i++) {
                     var singleAction = actionDiv.appendChild(document.createElement('div'));
-                    singleAction.innerText = (i+1) + " - " + getActionText(lastInteractionSelected.actions[i]);
+                    singleAction.innerText = (i+1) + " - " + getActionText(actionViewed.actions[i]);
                     singleAction.style.backgroundColor = actionIndex===i ? 'DarkOrange' : 'beige';
                     singleAction.style.borderTopLeftRadius = '4px';
                     singleAction.style.borderTopRightRadius = '4px';
@@ -514,14 +1015,14 @@ define(function() {
                         singleAction.style.borderBottomRightRadius = "4px";
                     }
 
-                    singleAction.style.padding = "1px 2px";
+                    singleAction.style.padding = "1px 4px 1px 2px";
                     singleAction.style.marginTop = "2px";
                     singleAction.style.fontSize = "9pt";
                     singleAction.style.color = actionIndex===i ? "white":"DarkOrange";
                     singleAction.style.cursor = "pointer";
                     singleAction.index = i;
                     singleAction.addEventListener("click", (e) => {
-                        actionIndex = actionIndex===e.target.index?-1:e.target.index;
+                        actionIndex = actionIndex===e.currentTarget.index?-1:e.currentTarget.index;
                         render();
                     });
                     if(actionIndex === i) {
@@ -530,7 +1031,7 @@ define(function() {
                 }
 
                 if(selectedActionDiv) {
-                    var selectedAction = lastInteractionSelected.actions[actionIndex];
+                    var selectedAction = actionViewed.actions[actionIndex];
                     var actionEditDiv =  actionDiv.insertBefore(document.createElement('div'), selectedActionDiv.nextSibling);
                     actionEditDiv.style.backgroundColor = "moccasin";
                     actionEditDiv.style.borderBottomLeftRadius = "4px";
@@ -547,12 +1048,16 @@ define(function() {
                     if(!radioAction1.checked) {
                         radioAction1.addEventListener("click", (e) => {
                             if(!selectedAction.ref) {
-                                for(var i in game.data.globalActions) {
-                                    selectedAction.ref = i;
-                                    break;
+                                for(var actionName in game.data.globalActions) {
+                                    if(editorTab !== 'actions' || actionName !== globalActionSelected) {
+                                        selectedAction.ref = actionName;
+                                        break;
+                                    }
                                 }
                             }
-                            selectedAction.useRef = true;
+                            if(selectedAction.ref) {
+                                selectedAction.useRef = true;
+                            }
                             render();
                             game.render();
                         });
@@ -564,6 +1069,10 @@ define(function() {
                     actionSelect.disabled = !radioAction1.checked;
 
                     for(var actionName in game.data.globalActions) {
+                        if(editorTab === 'actions' && actionName === globalActionSelected) {
+                            continue;
+                        }
+
                         var option = actionSelect.appendChild(document.createElement('option'));
                         option.value = actionName;
                         option.innerText = actionName;
@@ -571,19 +1080,44 @@ define(function() {
                             || typeof(selectedAction)==='object' && actionName === selectedAction.ref;
                     }
 
+                    var option = actionSelect.appendChild(document.createElement('option'));
+                    option.value = '';
+                    option.innerText = "[ new global action ]";
+
                     actionSelect.addEventListener("change", (e) => {
-                        if(e.target.value !== '') {
-                            if(typeof(selectedAction)==='string') {
-                                lastInteractionSelected.actions[actionIndex] = e.target.value;
-                            } else {
-                                selectedAction.ref = e.target.value;
+                        var actionName = e.currentTarget.value;
+                        if(actionName === '') {
+                            var name = prompt("Enter a name for this action", '');
+                            if(name !== null && name.trim()!=="") {
+                                if(game.data.globalActions[name]) {
+                                    if(name !== globalActionSelected) {
+                                        actionName = name;
+                                    }
+                                } else {
+                                    game.data.globalActions[name] = {
+                                        actions: [],
+                                        backgroundImg: placeHolderImage,
+                                        name: name,
+                                    };
+                                    actionName = name;
+                                }
                             }
                         }
-                        game.render();
+
+                        if(actionName !== '') {
+                            if(typeof(selectedAction)==='string') {
+                                actionViewed.actions[actionIndex] = actionName;
+                            } else {
+                                selectedAction.ref = actionName;
+                            }
+                            game.render();
+                        }
                         render();
                     });
 
                     var radioGroup2 = actionEditDiv.appendChild(document.createElement('div'));
+                    radioGroup2.style.display = "flex";
+                    radioGroup2.style.flexDirection = "row";
                     var radioAction2 = radioGroup2.appendChild(document.createElement('input'));
                     radioAction2.type = 'radio';
                     radioAction2.id = "radioAction2";
@@ -593,7 +1127,7 @@ define(function() {
                     if (!radioAction2.checked) {
                         radioAction2.addEventListener("click", (e) => {
                             if(typeof(selectedAction)==='string') {
-                                selectedAction = lastInteractionSelected.actions[actionIndex] = {
+                                selectedAction = actionViewed.actions[actionIndex] = {
                                     ref: selectedAction,
                                 };
                             }
@@ -627,19 +1161,18 @@ define(function() {
                     }
 
                     actionTypeSelect.addEventListener("change", (e) => {
-                        if(e.target.value !== '' && e.target.value !== selectedAction.type) {
-                            selectedAction.type = e.target.value;
-                            var availableTargets = availableActions[e.target.value]();
-                            if(availableTargets.indexOf(selectedAction.target)<0) {
+                        if(e.currentTarget.value !== '' && e.currentTarget.value !== selectedAction.type) {
+                            selectedAction.type = e.currentTarget.value;
+                            var availableTargets = availableActions[e.currentTarget.value]();
+                            if(selectedAction.target !== '' && availableTargets.indexOf(selectedAction.target)<0) {
                                 selectedAction.target = availableTargets[0];
                             }
                             if(selectedAction.type==='setVariable' && typeof(selectedAction.value)==='undefined') {
                                 selectedAction.value = true;
                             }
-
+                            game.render();
+                            render();
                         }
-                        game.render();
-                        render();
                     });
 
                     var actionTargetSelect = radioGroup2.appendChild(document.createElement('select'));
@@ -655,13 +1188,55 @@ define(function() {
                         option.innerText = target;
                         option.selected = typeof(selectedAction)==='object' && selectedAction.target === target;
                     }
+                    if(actionTypeSelect.value === 'take') {
+                        var option = actionTargetSelect.appendChild(document.createElement('option'));
+                        option.value = '';
+                        option.innerText = "[ new item ]";
+                    } else if(actionTypeSelect.value === 'goto') {
+                        var option = actionTargetSelect.appendChild(document.createElement('option'));
+                        option.value = '';
+                        option.innerText = "[ new scene ]";
+                    }
 
                     actionTargetSelect.addEventListener("change", (e) => {
-                        if(e.target.value !== '' && e.target.value !== selectedAction.target) {
-                            selectedAction.target = e.target.value;
+                        if(e.currentTarget.value === '') {
+                            if(actionTypeSelect.value === 'take') {
+                                var newName = prompt("Enter a name for the new item");
+                                if(newName && newName.trim()!=="") {
+                                    if(game.data.items[newName]) {
+                                        selectedAction.target = newName;
+                                    } else {
+                                        game.data.items[newName] = {
+                                            description: "",
+                                            icon:placeHolderImage,
+                                        };
+                                        selectedAction.target = newName;
+                                        game.render();
+                                        render();
+                                    }
+                                }
+                            } else if(actionTypeSelect.value === 'goto') {
+                                var newName = prompt("Enter a name for the new scene");
+                                if(newName && newName.trim()!=="") {
+                                    if(game.data.scenes[newName]) {
+                                        selectedAction.target = newName;
+                                    } else {
+                                        game.data.scenes[newName] = {
+                                            interactions: [],
+                                            backgroundImg: placeHolderImage,
+                                            name: newName,
+                                        };
+                                        selectedAction.target = newName;
+                                        game.render();
+                                        render();
+                                    }
+                                }
+                            }
+                        } else if(e.currentTarget.value !== selectedAction.target) {
+                            selectedAction.target = e.currentTarget.value;
+                            render();
+                            game.render();
                         }
-                        render();
-                        game.render();
                     });
 
                     if(actionTypeSelect.value==='setVariable') {
@@ -672,7 +1247,7 @@ define(function() {
                         checkbox.disabled = !radioAction2.checked;
                         checkbox.checked = selectedAction.value;
                         checkbox.addEventListener("change", (e) => {
-                            selectedAction.value = e.target.checked;
+                            selectedAction.value = e.currentTarget.checked;
                             render();
                             game.render();
                         });
@@ -689,9 +1264,9 @@ define(function() {
                         moveUpLink.style.color = "blue";
                         moveUpLink.addEventListener("click", (e) => {
                             var previous = actionIndex - 1;
-                            var temp = lastInteractionSelected.actions[previous];
-                            lastInteractionSelected.actions[previous] = lastInteractionSelected.actions[actionIndex];
-                            lastInteractionSelected.actions[actionIndex] = temp;
+                            var temp = actionViewed.actions[previous];
+                            actionViewed.actions[previous] = actionViewed.actions[actionIndex];
+                            actionViewed.actions[actionIndex] = temp;
                             actionIndex = previous;
                             game.render();
                             render();
@@ -704,14 +1279,14 @@ define(function() {
 
                     var moveDownLink = links.appendChild(document.createElement("span"));
                     moveDownLink.innerText = "move down";
-                    if(actionIndex < lastInteractionSelected.actions.length-1) {
+                    if(actionIndex < actionViewed.actions.length-1) {
                         moveDownLink.style.cursor = "pointer";
                         moveDownLink.style.color = "blue";
                         moveDownLink.addEventListener("click", (e) => {
                             var next = actionIndex + 1;
-                            var temp = lastInteractionSelected.actions[next];
-                            lastInteractionSelected.actions[next] = lastInteractionSelected.actions[actionIndex];
-                            lastInteractionSelected.actions[actionIndex] = temp;
+                            var temp = actionViewed.actions[next];
+                            actionViewed.actions[next] = actionViewed.actions[actionIndex];
+                            actionViewed.actions[actionIndex] = temp;
                             actionIndex = next;
                             game.render();
                             render();
@@ -724,19 +1299,23 @@ define(function() {
 
                     var deleteActionLink = links.appendChild(document.createElement("span"));
                     deleteActionLink.innerText = "remove step";
-                    deleteActionLink.style.cursor = "pointer";
-                    deleteActionLink.style.color = "crimson";
-                    deleteActionLink.addEventListener("click", (e) => {
-                        var answer = confirm("Delete the action \"" + (
-                            getActionText(lastInteractionSelected.actions[actionIndex])
-                        ) + "\"?");
-                        if (answer) {
-                            lastInteractionSelected.actions.splice(actionIndex);
-                            actionIndex = -1;
-                            game.render();
-                            render();
-                        }
-                    });
+                    if(actionViewed.actions.length > 1) {
+                        deleteActionLink.style.cursor = "pointer";
+                        deleteActionLink.style.color = "crimson";
+                        deleteActionLink.addEventListener("click", (e) => {
+                            var answer = confirm("Delete the action \"" + (
+                                getActionText(actionViewed.actions[actionIndex])
+                            ) + "\"?");
+                            if (answer) {
+                                actionViewed.actions.splice(actionIndex);
+                                actionIndex = -1;
+                                game.render();
+                                render();
+                            }
+                        });
+                    } else {
+                        deleteActionLink.style.color = "white";
+                    }
 
                 } else {
                     var createActionLink = actionDiv.appendChild(document.createElement("div"));
@@ -746,14 +1325,14 @@ define(function() {
                     createActionLink.style.cursor = "pointer";
                     createActionLink.style.color = "blue";
                     createActionLink.addEventListener("click", (e) => {
-                        lastInteractionSelected.actions.push(firstGlobalAction());
-                        actionIndex = lastInteractionSelected.actions.length-1;
+                        actionViewed.actions.push(defaultAction());
+                        actionIndex = actionViewed.actions.length-1;
                         game.render();
                         render();
                     });
                 }
-
-                if(actionIndex < 0) {
+/*
+                if(actionIndex < 0 && editorTab!=='actions') {
                     var createGlobal = div.appendChild(document.createElement('input'));
                     createGlobal.type="button";
                     createGlobal.style.marginTop = "2px";
@@ -774,8 +1353,8 @@ define(function() {
 
                                 var accept = true;
                                 if(nameCollide) {
-                                    for(var i=0; i<lastInteractionSelected.actions.length;i++) {
-                                        var action = lastInteractionSelected.actions[i];
+                                    for(var i=0; i<actionViewed.actions.length;i++) {
+                                        var action = actionViewed.actions[i];
                                         var actionName = typeof(action)==='string'
                                             ? action
                                             : action.useRef
@@ -794,9 +1373,9 @@ define(function() {
 
                                 if(accept) {
                                     game.data.globalActions[name] = {
-                                        actions: lastInteractionSelected.actions,
+                                        actions: actionViewed.actions,
                                     };
-                                    lastInteractionSelected.actions = [
+                                    actionViewed.actions = [
                                         name,
                                     ];
                                 }
@@ -804,14 +1383,15 @@ define(function() {
                         }
                     });
                 }
+                */
             }
         }
 
-        function firstGlobalAction() {
-            for(var action in game.data.globalActions) {
-                return action;
-            }
-            return null;
+        function defaultAction() {
+            return {
+                type: 'goto',
+                target: game.data.startScene,
+            };
         }
 
         function selectInteraction(interaction) {
@@ -833,11 +1413,11 @@ define(function() {
                 var option = interactionSelect.appendChild(document.createElement('option'));
                 var interaction = i>=0 ? interactions[i] : null;
                 option.value = i;
-                option.innerText = !interaction ? "Select an interaction" : interaction.name || "Interaction " + (i+1);
+                option.innerText = !interaction ? "Select an interaction" : interaction.name || "interaction " + (i+1);
                 option.selected = lastInteractionSelected === interaction;
             }
             interactionSelect.addEventListener("change", (e) => {
-                selectInteraction(interactions[e.target.value]);
+                selectInteraction(interactions[e.currentTarget.value]);
                 render();
             });
 
@@ -851,22 +1431,22 @@ define(function() {
                 for(var i=0; i<interactions.length; i++) {
                     var link = linksDiv.appendChild(document.createElement("div"));
                     var interaction = interactions[i];
-                    link.innerText = interaction.name || "Interaction " + (i+1);
+                    link.innerText = interaction.name || "interaction " + (i+1);
                     link.style.cursor = "pointer";
                     link.style.color = interaction===rollOvered?"teal" : "blue";
                     link.interaction = interaction;
                     link.addEventListener("click", (e) => {
-                        selectInteraction(e.target.interaction);
+                        selectInteraction(e.currentTarget.interaction);
                         render();
                     });
                     link.addEventListener('mouseover', (e) => {
-                        if(rollOvered !== e.target.interaction) {
-                            rollOvered = e.target.interaction;
+                        if(rollOvered !== e.currentTarget.interaction) {
+                            rollOvered = e.currentTarget.interaction;
                             render();
                         }
                     });
                     link.addEventListener('mouseout', (e) => {
-                        if(rollOvered === e.target.interaction) {
+                        if(rollOvered === e.currentTarget.interaction) {
                             rollOvered = null;
                             render();
                         }
@@ -890,7 +1470,7 @@ define(function() {
 
                     scene.interactions.push({
                         actions: [
-                            firstGlobalAction(),
+                            defaultAction(),
                         ],
                         hidden: false,
                         location: {
@@ -913,7 +1493,7 @@ define(function() {
                 renamelink.style.color = "blue";
                 renamelink.style.fontSize = "12px";
                 renamelink.style.marginLeft = "2px";
-                renamelink.innerText="rename interaction";
+                renamelink.innerText="rename";
                 renamelink.addEventListener("click", (e) => {
                     var newName = prompt("Enter a name for this interaction",
                         lastInteractionSelected.name || '');
@@ -967,7 +1547,7 @@ define(function() {
                         input.addEventListener("change", onUpload);
                         input.setAttribute("accept", "image/*");
 
-                        icon.addEventListener("mousedown", () => {
+                        icon.addEventListener("click", () => {
                             input.click();
                         });
                         break;
@@ -981,7 +1561,7 @@ define(function() {
                     option.selected = lastInteractionSelected.location.shape === shapes[i];
                 }
                 shapeSelect.addEventListener("change", (e) => {
-                    changeShape(lastInteractionSelected.location, e.target.value);
+                    changeShape(lastInteractionSelected.location, e.currentTarget.value);
                     game.render();
                     render();
                 });
@@ -1018,10 +1598,10 @@ define(function() {
                 }
 
                 variableSelect.addEventListener("change", function(e) {
-                    if(!e.target.value) {
+                    if(!e.currentTarget.value) {
                         delete lastInteractionSelected.if;
                     } else {
-                        lastInteractionSelected.if = e.target.value;
+                        lastInteractionSelected.if = e.currentTarget.value;
                     }
                     render();
                     game.render();
@@ -1035,7 +1615,7 @@ define(function() {
                 deletelink.addEventListener("click", (e) => {
                     var answer = confirm("Delete the interaction \"" + (
                         lastInteractionSelected.name
-                        || "Interaction " + (getActiveScene().interactions.indexOf(lastInteractionSelected)+1)
+                        || "interaction " + (getActiveScene().interactions.indexOf(lastInteractionSelected)+1)
                     ) + "\"?");
                     if(answer) {
                         var index = getActiveScene().interactions.indexOf(lastInteractionSelected);
@@ -1105,7 +1685,7 @@ define(function() {
         }
 
         function getCorner(e) {
-            var target = e.target;
+            var target = e.currentTarget;
             var diffLeft = Math.abs(target.offsetLeft - e.clientX);
             var diffRight = Math.abs(target.offsetLeft + target.offsetWidth - e.clientX);
             var diffTop = Math.abs(target.offsetTop - e.clientY);
@@ -1249,8 +1829,14 @@ define(function() {
                 divOffset.selection = null;
                 divOffset.cornerDragged = null;
                 divOffset.originalSize = null;
-                render();
-                game.render();
+                if(e.target.interactionBox) {
+                    selectInteraction(e.target.interaction);
+                    render();
+                    game.render();
+                } else {
+                    render();
+                    game.render();
+                }
             }
         });
 
