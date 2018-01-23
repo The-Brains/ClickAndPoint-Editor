@@ -1,4 +1,7 @@
-define(function() {
+define([
+        'lodash',
+    ], (_) => {
+
     var placeHolderImage = "./assets/placeholder.svg";
     return function(div, gameInterface) {
         var game = gameInterface;
@@ -49,6 +52,22 @@ define(function() {
         }
 
         function jumpToScene(sceneName) {
+            if(sceneName==='') {
+                var name = prompt("Enter a name for this scene", '');
+                if(name !== null && name.trim()!=="") {
+                    var camelName = _.camelCase(name);
+                    game.data.scenes[camelName] = {
+                        interactions: [],
+                        backgroundImg: placeHolderImage,
+                        name: name,
+                    };
+                    sceneName = camelName;
+                } else {
+                    render();
+                    return;
+                }
+            }
+
             browseScene = false;
             currentScene = sceneName;
             var locationDiv = document.getElementById('locationDiv');
@@ -114,12 +133,12 @@ define(function() {
         function addSceneThumbnail(div) {
             var w = game.renderer.get$Canvas().width(),
                 h = game.renderer.get$Canvas().height();
-            var scale = Math.min(100/w, 50/h);
+            var scale = Math.max(60/w, 50/h);
 
             for(var s in game.data.scenes) {
                 var scene = game.data.scenes[s];
                 var thumbnail = div.appendChild(document.createElement("div"));
-                thumbnail.style.width = w * scale +"px";
+                thumbnail.style.width = w * scale + "px";
                 thumbnail.style.height = h * scale + "px";
                 thumbnail.style.margin = "2px";
                 thumbnail.style.backgroundColor = "black";
@@ -128,42 +147,70 @@ define(function() {
                 thumbnail.style.backgroundSize = "contain";
                 thumbnail.style.backgroundRepeat = "no-repeat";
                 thumbnail.style.cursor = "pointer";
-                thumbnail.style.backgroundColor = "black";
                 thumbnail.style.backgroundPosition = "center";
                 thumbnail.scene = s;
 
                 var label = thumbnail.appendChild(document.createElement("div"));
-                label.style.fontSize = "11px";
+                label.style.fontSize = "10px";
                 label.style.backgroundColor = "beige";
                 label.style.opacity = .9;
                 label.style.textAlign = "center";
-                label.innerText = s;
+                label.innerText = scene.name;
 
                 thumbnail.addEventListener("click", (e) => {
                     jumpToScene(e.currentTarget.scene);
                 });
             }
+
+            var addSceneThumbnail = div.appendChild(document.createElement("div"));
+            addSceneThumbnail.style.fontSize = "30px";
+            addSceneThumbnail.style.width = w * scale + "px";
+            addSceneThumbnail.style.height = h * scale + "px";
+            addSceneThumbnail.style.margin = "2px";
+            addSceneThumbnail.style.backgroundColor = "#eeeeee";
+            addSceneThumbnail.style.cursor = "pointer";
+            addSceneThumbnail.style.display = "flex";
+            addSceneThumbnail.style.alignItems = "center";
+            addSceneThumbnail.style.justifyContent = "center";
+
+            var label = addSceneThumbnail.appendChild(document.createElement('div'));
+            addSceneThumbnail.innerText = "+";
+
+            addSceneThumbnail.addEventListener("click", (e) => {
+                jumpToScene('');
+            });
         }
 
-        function changeItemReference(oldName, newName) {
+        function changeReference(actionType, oldName, newName) {
             for(var actionName in game.data.globalActions) {
                 game.data.globalActions[actionName].actions.forEach(action => {
-                    changeItemReferenceInAction(oldName, newName, action);
+                    changeReferenceInAction(actionType, oldName, newName, action);
                 });
             }
             for(var s in game.data.scenes) {
                 game.data.scenes[s].interactions.forEach(interaction => {
                     interaction.actions.forEach(action => {
-                        changeItemReferenceInAction(oldName, newName, action);
+                        changeReferenceInAction(actionType, oldName, newName, action);
                     });
+                    if(actionType==='setVariable' && interaction.if === oldName) {
+                        if(newName) {
+                            interaction.if = newName;
+                        } else {
+                            delete interaction.if;
+                        }
+                    }
                 });
             }
         }
 
-        function changeItemReferenceInAction(oldName, newName, action) {
+        function changeReferenceInAction(actionType, oldName, newName, action) {
             if(typeof(action)==='object') {
-                if(action.type==='take' && action.target===oldName) {
-                    action.target = newName;
+                if(action.type===actionType && action.target===oldName) {
+                    if(newName) {
+                        action.target = newName;
+                    } else {
+                        delete action.target;
+                    }
                 }
             }
         }
@@ -291,15 +338,18 @@ define(function() {
                         if(game.data.items[name]) {
                             alert("This item \""+ name +"\" already exists.");
                         } else {
+                            var oldOwned = game.isItemOwned(itemSelected);
                             game.data.items[name] = game.data.items[itemSelected];
                             delete game.data.items[itemSelected];
-                            changeItemReference(itemSelected, name);
+                            changeReference("take", itemSelected, name);
                             itemSelected = name;
+                            if(oldOwned) {
+                                game.takeItem(name);
+                            }
                             game.render();
                             render();
                         }
                     }
-                    render();
                 });
 
                 links.appendChild(document.createElement("span")).innerText = " - ";
@@ -312,7 +362,7 @@ define(function() {
                     var answer = confirm("Delete the item \"" + itemSelected + "\"?");
                     if(answer) {
                         delete game.data.items[itemSelected];
-                        changeItemReference(itemSelected, '');
+                        changeReference("take", itemSelected, null);
                         itemSelected = null;
                         render();
                         game.render();
@@ -340,16 +390,18 @@ define(function() {
             links.style.fontSize = "12px";
             links.style.marginLeft = "4px";
 
+            var selectedVarLink = null;
             for(var varName in game.data.variables) {
                 var varLink = links.appendChild(document.createElement('div'));
                 varLink.style.borderRadius = "4px";
                 varLink.style.margin = "1px 1px 1px 5px";
-                varLink.style.padding = "1px 3px 2px 3px";
+                varLink.style.padding = "1px 3px 2px 5px";
                 varLink.style.cursor = "pointer";
                 varLink.variable = varName;
                 if(selectedVariable===varName) {
-                    varLink.style.color = "navy";
-                    varLink.style.backgroundColor = "snow";
+                    varLink.style.color = "white";
+                    varLink.style.backgroundColor = "navy";
+                    selectedVarLink = varLink;
                 } else {
                     varLink.style.color = "navy";
                     varLink.style.backgroundColor = "snow";
@@ -365,20 +417,64 @@ define(function() {
                 checkbox.name = varName;
                 checkbox.variable = varName;
                 checkbox.addEventListener("change", (e) => {
-                    game.data.variables[e.target.name] =
-                        e.target.checked;
-                    selectedVariable = e.target.variable;
+                    game.data.variables[e.currentTarget.name] = e.currentTarget.checked;
                     render();
                     game.render();
                 });
 
                 varLink.addEventListener("click", e => {
-                    selectedVariable = e.target.variable;
-                    render();
-                    game.render();
+                    if(e.target.type !== 'checkbox') {
+                        selectedVariable = selectedVariable !== e.currentTarget.variable
+                            ? e.currentTarget.variable : null;
+                        render();
+                        game.render();
+                    }
                 });
-
             }
+
+            if(selectedVariable) {
+                var variableLinkGroup = links.insertBefore(document.createElement('div'),
+                    selectedVarLink.nextSibling);
+                variableLinkGroup.style.textAlign = "center";
+                var renameLink = variableLinkGroup.appendChild(document.createElement('span'));
+                renameLink.innerText = "rename";
+                renameLink.style.color = "green";
+                renameLink.style.cursor = "pointer";
+                renameLink.addEventListener("click", (e) => {
+                    var name = prompt("Enter a new name for this variable", selectedVariable);
+                    if(name !== null && name.trim()!=="" && name !== selectedVariable) {
+                        if(game.data.variables[name]) {
+                            alert("The variable \""+ name +"\" already exists.");
+                        } else {
+                            var oldValue = game.getVariable(selectedVariable);
+                            game.data.variables[name] = game.data.variables[selectedVariable];
+                            delete game.data.variables[selectedVariable];
+                            changeReference("setVariable", selectedVariable, name);
+                            selectedVariable = name;
+                            game.updateVariable(name, oldValue);
+                            game.render();
+                            render();
+                        }
+                    }
+                });
+                variableLinkGroup.appendChild(document.createElement('span')).innerText = " - ";
+
+                var deleteLink = variableLinkGroup.appendChild(document.createElement('span'));
+                deleteLink.innerText = "delete";
+                deleteLink.style.color = "crimson";
+                deleteLink.style.cursor = "pointer";
+                deleteLink.addEventListener("click", (e) => {
+                    var answer = confirm("Delete the variable \"" + selectedVariable + "\"?");
+                    if(answer) {
+                        delete game.data.variables[selectedVariable];
+                        changeReference("setVariable", selectedVariable, null);
+                        selectedVariable = null;
+                        render();
+                        game.render();
+                    }
+                });
+            }
+
         }
 
         function addActionSelector(div) {
@@ -446,10 +542,6 @@ define(function() {
             if(scene && !scene.backgroundImg) {
                 scene.backgroundImg = placeHolderImage;
             }
-            var w = game.renderer.get$Canvas().width(),
-                h = game.renderer.get$Canvas().height();
-            var scale = Math.min(100/w, 50/h);
-
             var sceneDiv =  div.appendChild(document.createElement('div'));
             sceneDiv.style.display = "flex";
             sceneDiv.style.flexDirection = "column";
@@ -459,13 +551,13 @@ define(function() {
 
             var backgroundDiv = sceneDiv.appendChild(document.createElement('div'));
             backgroundDiv.id = "backgroundDiv";
-            backgroundDiv.style.width = w * scale +"px";
-            backgroundDiv.style.height = h * scale + "px";
+            backgroundDiv.style.width = "90px";
+            backgroundDiv.style.height = "45px";
             backgroundDiv.style.backgroundImage = "url(" + scene.backgroundImg + ")";
             backgroundDiv.style.backgroundSize = "contain";
             backgroundDiv.style.backgroundRepeat = "no-repeat";
             backgroundDiv.style.cursor = "pointer";
-            backgroundDiv.style.backgroundColor = "black";
+            backgroundDiv.style.backgroundColor = "#cccccc";
             backgroundDiv.style.backgroundPosition = "center";
 
             var divUpload = backgroundDiv.appendChild(document.createElement("div"));
@@ -487,9 +579,12 @@ define(function() {
             for(var sceneId in game.data.scenes) {
                 var option = select.appendChild(document.createElement('option'));
                 option.value = sceneId;
-                option.innerText = sceneId;
+                option.innerText = game.data.scenes[sceneId].name;
                 option.selected = sceneId === currentScene;
             }
+            var option = select.appendChild(document.createElement('option'));
+            option.value = '';
+            option.innerText = "[ new scene ]";
 
             select.addEventListener("change", (e) => {
                 jumpToScene(e.currentTarget.value);
@@ -502,7 +597,7 @@ define(function() {
             if (game.data.startScene !== currentScene) {
                 startLink.innerText = "make starting scene";
                 startLink.style.cursor = "pointer";
-                startLink.style.color = "green";
+                startLink.style.color = "firebrick";
                 startLink.addEventListener("click", (e) => {
                     game.data.startScene = currentScene;
                     render();
@@ -513,25 +608,22 @@ define(function() {
                 startLink.innerText = "starting scene";
             }
 
-            var createLink = links.appendChild(document.createElement('div'));
-            createLink.innerText = "new scene";
-            createLink.style.cursor = "pointer";
-            createLink.style.color = "blue";
-            createLink.addEventListener("click", (e) => {
-                var name = prompt("Enter a name for this scene", '');
+            var renameLink = links.appendChild(document.createElement('div'));
+            renameLink.innerText = "rename";
+            renameLink.style.cursor = "pointer";
+            renameLink.style.color = "green";
+            renameLink.addEventListener("click", (e) => {
+                var name = prompt("Enter a new name for this scene", scene.name);
                 if(name !== null && name.trim()!=="") {
-                    game.data.scenes[name] = {
-                        interactions: [],
-                        backgroundImg: placeHolderImage,
-                        name: name,
-                    };
-                    jumpToScene(name);
+                    scene.name = name;
+                    render();
+                    game.render();
                 }
             });
 
             if (sceneCount() > 1) {
                 var deleteLink = links.appendChild(document.createElement('div'));
-                deleteLink.innerText = "delete scene";
+                deleteLink.innerText = "delete";
                 deleteLink.style.cursor = "pointer";
                 deleteLink.style.color = "crimson";
                 deleteLink.addEventListener("click", (e) => {
@@ -545,6 +637,87 @@ define(function() {
                     }
                 });
             }
+        }
+
+        function addLiveVariableEditor(div) {
+            div.style.backgroundColor = "ivory";
+            div.style.margin = "0 8px";
+            div.style.width = "100%";
+            div.style.borderRadius = "8px";
+            div.style.fontSize = "12px";
+            var liveVariableLabel = div.appendChild(document.createElement('div'));
+            liveVariableLabel.innerText = 'live variables';
+            liveVariableLabel.style.backgroundColor = 'orange';
+            liveVariableLabel.style.color = "Ivory";
+            liveVariableLabel.style.width = "100%";
+            liveVariableLabel.style.textAlign = 'center';
+            liveVariableLabel.style.borderTopLeftRadius = "8px";
+            liveVariableLabel.style.borderTopRightRadius = "8px";
+            liveVariableLabel.style.padding = "1px";
+            liveVariableLabel.style.marginBottom = "1px";
+            var divVars = div.appendChild(document.createElement('div'));
+            divVars.style.display = "flex";
+            divVars.style.flexWrap = "warp";
+            divVars.style.margin = "0 2px";
+            for(var v in game.data.variables) {
+                var boxDiv = divVars.appendChild(document.createElement('div'));
+                boxDiv.style.backgroundColor = 'gold';
+                boxDiv.style.margin = "1px 2px";
+                boxDiv.style.borderRadius = "4px";
+                boxDiv.style.paddingLeft  = "3px";
+                var label = boxDiv.appendChild(document.createElement('label'));
+                label.innerText = v;
+                label.style.cursor = 'pointer';
+                label.setAttribute('for', 'checkbox_' + v);
+                var checkbox = boxDiv.appendChild(document.createElement('input'));
+                checkbox.type = "checkbox";
+                checkbox.id = 'checkbox_' + v;
+                checkbox.checked = game.getVariable(v);
+                checkbox.variable = v;
+                checkbox.addEventListener('change', (e) => {
+                    game.updateVariable(e.currentTarget.variable, e.currentTarget.checked);
+                })
+            }
+
+            var divItems = div.appendChild(document.createElement('div'));
+            divItems.style.display = "flex";
+            divItems.style.flexWrap = "warp";
+            divItems.style.margin = "0 2px";
+            for(var i in game.data.items) {
+                var item = game.data.items[i];
+                var boxDiv = divItems.appendChild(document.createElement('div'));
+                boxDiv.style.backgroundColor = 'LightSkyBlue';
+                boxDiv.style.margin = "1px 2px";
+                boxDiv.style.borderRadius = "4px";
+                boxDiv.style.paddingLeft  = "3px";
+                boxDiv.style.display = "flex";
+                boxDiv.style.flexDirection = "row";
+                boxDiv.style.alignItems = "center";
+                var label = boxDiv.appendChild(document.createElement('label'));
+                label.innerText = 'has' + _.capitalize(i);
+                label.style.cursor = 'pointer';
+                label.setAttribute('for', 'checkbox_' + i);
+                var icon = boxDiv.appendChild(document.createElement("div"));
+                icon.style.width = "16px";
+                icon.style.height = "16px";
+                icon.style.backgroundImage = "url(" + item.icon + ")";
+                icon.style.backgroundSize = "contain";
+                icon.style.backgroundRepeat = "no-repeat";
+                icon.style.backgroundPosition = "center";
+                var checkbox = boxDiv.appendChild(document.createElement('input'));
+                checkbox.type = "checkbox";
+                checkbox.id = 'checkbox_' + i;
+                checkbox.checked = game.isItemOwned(i);
+                checkbox.item = i;
+                checkbox.addEventListener('change', (e) => {
+                    if(e.currentTarget.checked) {
+                        game.takeItem(e.currentTarget.item);
+                    } else {
+                        game.dropItem(e.currentTarget.item);
+                    }
+                })
+            }
+
         }
 
         function firstScene() {
@@ -607,23 +780,10 @@ define(function() {
                     d.interactionBox = true;
                     d.interaction = interaction;
                     d.addEventListener("mousedown", selectLocation);
-                    d.addEventListener('mouseover', (e) => {
-                        if(rollOvered !== e.currentTarget.interaction) {
-                            rollOvered = e.currentTarget.interaction;
-                            render();
-                        }
-                    });
-                    d.addEventListener('mouseout', (e) => {
-                        if(rollOvered === e.currentTarget.interaction) {
-                            rollOvered = null;
-                            render();
-                        }
-                    });
-
 
                     if(interaction===lastInteractionSelected) {
                         flashInterval = flashLocation(d, borderWidth, 100);
-                    } else if (interaction===rollOvered) {
+                    } else if (!lastInteractionSelected && interaction===rollOvered) {
                         flashInterval = flashLocation(d, borderWidth, 50);
                     }
                 }
@@ -737,6 +897,7 @@ define(function() {
             addVariableEditor(divLeft);
 
             var divRight = divRow.appendChild(document.createElement('div'));
+            addLiveVariableEditor(divRight);
 
             var postUpdate = () => {
                 var locationDiv = divContainer.appendChild(document.createElement('div'));
@@ -759,6 +920,20 @@ define(function() {
 
             var editorSpan = breadCrumbDiv.appendChild(document.createElement('span'));
             editorSpan.innerText = editorTab;
+
+            if(editorTab==='variables' && selectedVariable) {
+                editorSpan.style.cursor = "pointer";
+                editorSpan.style.color = "blue";
+                editorSpan.addEventListener("click", (e) => {
+                    selectedVariable = null;
+                    render();
+                });
+
+                breadCrumbDiv.appendChild(document.createElement('span')).innerText = " > ";
+
+                var varSpan = breadCrumbDiv.appendChild(document.createElement('span'));
+                varSpan.innerText = selectedVariable;
+            }
 
             if(editorTab==='items' && itemSelected) {
                 editorSpan.style.cursor = "pointer";
@@ -814,7 +989,7 @@ define(function() {
 
                 breadCrumbDiv.appendChild(document.createElement('span')).innerText = " > ";
                 var sceneSpan = breadCrumbDiv.appendChild(document.createElement('span'));
-                sceneSpan.innerText = currentScene;
+                sceneSpan.innerText = game.data.scenes[currentScene].name;
 
                 if (lastInteractionSelected) {
                     breadCrumbDiv.appendChild(document.createElement('span')).innerText = " > ";
@@ -985,9 +1160,9 @@ define(function() {
                         ? action.ref
                         : action.type
                         +" "
-                        + action.target
+                        + (action.type==='goto'? game.data.scenes[action.target].name : action.target)
                         + (action.type==='setVariable'
-                                ?" = "+ (action.value.toString().toUpperCase())
+                                ?" = "+ action.value.toString()
                                 :'');
         }
 
@@ -1185,7 +1360,7 @@ define(function() {
                         var target = availableTargets[i];
                         var option = actionTargetSelect.appendChild(document.createElement('option'));
                         option.value = target;
-                        option.innerText = target;
+                        option.innerText = actionTypeSelect.value==='goto' ? game.data.scenes[target].name : target;
                         option.selected = typeof(selectedAction)==='object' && selectedAction.target === target;
                     }
                     if(actionTypeSelect.value === 'take') {
@@ -1221,12 +1396,13 @@ define(function() {
                                     if(game.data.scenes[newName]) {
                                         selectedAction.target = newName;
                                     } else {
-                                        game.data.scenes[newName] = {
+                                        var camelName = _.camelCase(newName);
+                                        game.data.scenes[camelName] = {
                                             interactions: [],
                                             backgroundImg: placeHolderImage,
                                             name: newName,
                                         };
-                                        selectedAction.target = newName;
+                                        selectedAction.target = camelName;
                                         game.render();
                                         render();
                                     }
@@ -1307,7 +1483,7 @@ define(function() {
                                 getActionText(actionViewed.actions[actionIndex])
                             ) + "\"?");
                             if (answer) {
-                                actionViewed.actions.splice(actionIndex);
+                                actionViewed.actions.splice(actionIndex, 1);
                                 actionIndex = -1;
                                 game.render();
                                 render();
@@ -1433,7 +1609,7 @@ define(function() {
                     var interaction = interactions[i];
                     link.innerText = interaction.name || "interaction " + (i+1);
                     link.style.cursor = "pointer";
-                    link.style.color = interaction===rollOvered?"teal" : "blue";
+                    link.style.color = interaction===rollOvered?"gold" : "blue";
                     link.interaction = interaction;
                     link.addEventListener("click", (e) => {
                         selectInteraction(e.currentTarget.interaction);
@@ -1596,6 +1772,13 @@ define(function() {
                     option.innerText = v;
                     option.selected = v === lastInteractionSelected.if;
                 }
+                for(var i in game.data.items) {
+                    var option = variableSelect.appendChild(document.createElement('option'));
+                    var v = 'has' + _.capitalize(i);
+                    option.value = v;
+                    option.innerText = v;
+                    option.selected = v === lastInteractionSelected.if;
+                }
 
                 variableSelect.addEventListener("change", function(e) {
                     if(!e.currentTarget.value) {
@@ -1685,7 +1868,7 @@ define(function() {
         }
 
         function getCorner(e) {
-            var target = e.currentTarget;
+            var target = e.target;
             var diffLeft = Math.abs(target.offsetLeft - e.clientX);
             var diffRight = Math.abs(target.offsetLeft + target.offsetWidth - e.clientX);
             var diffTop = Math.abs(target.offsetTop - e.clientY);

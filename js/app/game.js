@@ -133,6 +133,11 @@ define([
                     data: this.sourceData,
                     renderer: this.renderer,
                     render: render,
+                    takeItem: takeItem,
+                    dropItem: dropItem,
+                    isItemOwned: this.isItemOwned,
+                    updateVariable: updateVariable,
+                    getVariable: this.getVariable,
                 });
 
                 return changeScene(this.sourceData.startScene)
@@ -186,9 +191,13 @@ define([
 
         this.isValidVariableName = (varName, raise=false) => {
             var result = _.has(this.variables, varName);
+            if (!result && typeof(this.sourceData.variables[varName])!=='undefined') {
+                this.variables[varName] = this.sourceData.variables[varName];
+                result = _.has(this.variables, varName);
+            }
 
             if (!result && raise) {
-                throw `[MISSING VARIABLE] The variable '${varName}' cannot be find.`;
+                throw `[MISSING VARIABLE] The variable '${varName}' cannot be found.`;
             }
 
             return result;
@@ -200,6 +209,15 @@ define([
         }
 
         this.getVariable = (varName) => {
+            // check item
+            if(varName.indexOf('has')===0) {
+                var itemKey = _.camelCase(varName.substr(3));
+                if(this.isValidItemKey(itemKey)) {
+                    return this.isItemOwned(itemKey);
+                }
+            }
+
+
             this.isValidVariableName(varName, true);
             return this.variables[varName];
         }
@@ -233,7 +251,16 @@ define([
             return Promise.resolve({
                 render: true,
             });
-        }
+        };
+
+        var dropItem = (itemKey) => {
+            this.isValidItemKey(itemKey, true);
+            this.items[itemKey].owned = false;
+            this.mouse.updateCursor('default');
+            return Promise.resolve({
+                render: true,
+            });
+        };
 
         var updateVariable = (varName, varValue) => {
             this.variables[varName] = varValue;

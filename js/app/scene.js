@@ -95,6 +95,11 @@ define([
         }
 
         var handleUpdate = (renderer, mouse, methodName) => {
+            interactions = _.map(data.interactions, (interaction, index) => {
+                return interactions[index] || new Interaction(this, index, interaction);
+            });
+
+
             var promises = _.map(interactions, (interaction) => {
                 return interaction[methodName](renderer, mouse);
             });

@@ -198,7 +198,8 @@ const gameData = {
     },
     "startScene": "first",
     "variables": {
-        "clockShouldBeAccessible": false
+        "clockShouldBeAccessible": false,
+        "editorOn": true,
     }
 };
 
