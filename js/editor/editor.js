@@ -1131,21 +1131,18 @@ define([
                 var previousWidth = game.renderer.getBackgroundRatio().width;
                 game.render().then(()=> {
                     var wRatio = previousWidth/game.renderer.getBackgroundRatio().width;
-                    for(var s in game.data.scenes) {
-                        var scene = game.data.scenes[s];
-                        scene.interactions.forEach(interaction => {
-                            if(interaction.location.shape==='circle') {
-                                interaction.location.description.center.x *= wRatio;
-                                interaction.location.description.center.y *= wRatio;
-                                interaction.location.description.radius *= wRatio;
-                            } else {
-                                interaction.location.description.bottomRightCorner.x *= wRatio;
-                                interaction.location.description.bottomRightCorner.y *= wRatio;
-                                interaction.location.description.topLeftCorner.x *= wRatio;
-                                interaction.location.description.topLeftCorner.y *= wRatio;
-                            }
-                        });
-                    }
+                    scene.interactions.forEach(interaction => {
+                        if(interaction.location.shape==='circle') {
+                            interaction.location.description.center.x *= wRatio;
+                            interaction.location.description.center.y *= wRatio;
+                            interaction.location.description.radius *= wRatio;
+                        } else {
+                            interaction.location.description.bottomRightCorner.x *= wRatio;
+                            interaction.location.description.bottomRightCorner.y *= wRatio;
+                            interaction.location.description.topLeftCorner.x *= wRatio;
+                            interaction.location.description.topLeftCorner.y *= wRatio;
+                        }
+                    });
 
                     render();
                 });
