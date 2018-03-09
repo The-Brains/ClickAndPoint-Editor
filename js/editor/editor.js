@@ -82,6 +82,8 @@ define([
         }
 
         function makeSidebarButton(sideBar, text, pressed, callback) {
+            var darkColor = text==='publish'?'green':'darkblue';
+            var lightColor = text==='publish'?'greenyellow':'aqua';
             var button =  sideBar.appendChild(document.createElement('div'));
             button.innerText = text;
             button.style.fontSize = "12px";
@@ -91,13 +93,13 @@ define([
             if(pressed) {
                 button.style.margin = "1px 1px 1px 4px";
                 button.style.padding = "2px 2px 3px 15px";
-                button.style.backgroundColor = "darkblue";
+                button.style.backgroundColor = darkColor;
                 button.style.color = "white";
             } else {
                 button.style.margin = "1px 1px 1px 15px";
                 button.style.padding = "2px 2px 3px 4px";
-                button.style.backgroundColor = "aqua";
-                button.style.color = "darkblue";
+                button.style.backgroundColor = lightColor;
+                button.style.color = darkColor;
                 button.style.cursor = "pointer";
                 button.addEventListener("click", callback);
             }
@@ -126,6 +128,11 @@ define([
 
             makeSidebarButton(sideBar, "variables", editorTab==="variables", (e) => {
                 editorTab = "variables";
+                render();
+            });
+
+            makeSidebarButton(sideBar, "publish", editorTab==="publish", (e) => {
+                editorTab = "publish";
                 render();
             });
         }
@@ -536,6 +543,84 @@ define([
             });
         }
 
+        function bigButton(div, text, lightColor, darkColor) {
+            var button = div.appendChild(document.createElement('div'));
+            button.style.backgroundColor = lightColor;
+            button.innerText = text;
+            button.style.padding = "5px 10px";
+            button.style.fontSize = "20px";
+            button.style.borderRadius = "5px";
+            button.style.fontWeight = "bold";
+            button.style.cursor = "pointer";
+            button.style.color = darkColor;
+            button.style.borderBottom = "3px solid "+darkColor;
+            button.style.borderRight = "3px solid "+darkColor;
+            button.style.borderTop = "1px solid white";
+            button.style.borderLeft = "1px solid white";
+            button.addEventListener("mousedown", (e) => {
+                var button = e.target;
+                button.style.marginTop = "2px";
+                button.style.marginLeft = "2px";
+                button.style.borderBottom = "1px solid "+darkColor;
+                button.style.borderRight = "1px solid "+darkColor;
+            });
+            button.addEventListener("mouseup", (e) => {
+                var button = e.target;
+                button.style.marginTop = "";
+                button.style.marginLeft = "";
+                button.style.borderBottom = "3px solid "+darkColor;
+                button.style.borderRight = "3px solid "+darkColor;
+            });
+            return button;
+        }
+
+        function addScenePublish(div) {
+            div.style.display = "flex";
+            div.style.flexDirection = "row";
+            var scene = game.data.scenes[game.data.startScene];
+
+            var sceneDiv =  div.appendChild(document.createElement('div'));
+            sceneDiv.style.display = "flex";
+            sceneDiv.style.flexDirection = "column";
+            sceneDiv.style.alignItems = "center";
+            sceneDiv.style.justifyContent = "center";
+            sceneDiv.style.width = "120px";
+            sceneDiv.style.margin = "8px 0";
+
+            var backgroundDiv = sceneDiv.appendChild(document.createElement('div'));
+            backgroundDiv.id = "backgroundDiv";
+            backgroundDiv.style.width = "100px";
+            backgroundDiv.style.height = "80px";
+            backgroundDiv.style.backgroundImage = "url(" + scene.backgroundImg + ")";
+            backgroundDiv.style.backgroundSize = "contain";
+            backgroundDiv.style.backgroundRepeat = "no-repeat";
+            backgroundDiv.style.backgroundColor = "black";
+            backgroundDiv.style.backgroundPosition = "bottom";
+
+            var label = backgroundDiv.appendChild(document.createElement("div"));
+            label.style.fontSize = "12px";
+            label.style.backgroundColor = "navy";
+            label.style.color = 'white';
+            label.style.opacity = .9;
+            label.style.textAlign = "center";
+            label.innerText = game.data.settings ? game.data.settings.title : '';
+
+            var gameName = sceneDiv.appendChild(document.createElement('input'));
+            gameName.style.marginTop = "4px";
+            gameName.value = label.innerText;
+            gameName.placeholder = "Game's title";
+            gameName.addEventListener("keyup", (e) => {
+                if(!game.data.settings) {
+                    game.data.settings = {};
+                }
+                game.data.settings.title = e.currentTarget.value;
+                label.innerText = e.currentTarget.value;
+            });
+
+            var buttonDiv =  div.appendChild(document.createElement('div'));
+            bigButton(buttonDiv, 'make it live', 'greenyellow', 'green');
+        }
+
         function addSceneSelector(div) {
             var scene = getActiveScene();
 
@@ -892,6 +977,11 @@ define([
             }
         }
 
+        function showPublisher(divContainer, divRow, activeChange) {
+            var divLeft = divRow.appendChild(document.createElement('div'));
+            addScenePublish(divLeft);
+        }
+
         function showVariablesEditor(divContainer, divRow, activeChange) {
             var divLeft = divRow.appendChild(document.createElement('div'));
             addVariableEditor(divLeft);
@@ -1071,6 +1161,9 @@ define([
                         break;
                     case 'variables':
                         showVariablesEditor(divContainer, divRow, activeChange);
+                        break;
+                    case 'publish':
+                        showPublisher(divContainer, divRow, activeChange);
                         break;
                 }
             }
